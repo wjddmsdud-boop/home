@@ -12,7 +12,7 @@ st.write(
     "우리나라 읍·면·동 인구 데이터의 분포(퍼짐 정도)를 한눈에 파악해 봅시다!"
 )
 
-# 2. 데이터 불러오기 (선생님의 GitHub dataset 저장소 Raw 주소 사용)
+# 2. 데이터 불러오기
 DATA_URL = "https://raw.githubusercontent.com/wjddmsdud-boop/dataset/main/population_yearly.csv.gz"
 
 
@@ -29,8 +29,12 @@ def load_data():
     male_cols = [col for col in df_latest.columns if col.startswith("남_")]
     female_cols = [col for col in df_latest.columns if col.startswith("여_")]
 
-    # 남성 및 여성 인구를 행 단위(axis=1)로 더해 '총인구' 열 생성
-    df_latest["총인구"] = df_latest[male_cols + female_cols].sum(axis=1)
+    # 남성, 여성 각각의 총합 열 생성
+    df_latest["남_총인구"] = df_latest[male_cols].sum(axis=1)
+    df_latest["여_총인구"] = df_latest[female_cols].sum(axis=1)
+
+    # 행 단위(axis=1)로 남여 인구를 더해 '총인구' 열 생성
+    df_latest["총인구"] = df_latest["남_총인구"] + df_latest["여_총인구"]
 
     return df_latest, latest_year
 
@@ -41,8 +45,9 @@ df, year = load_data()
 st.success(f"🗓️ 가장 최신 데이터인 **{year}년 기준** 읍·면·동 인구 데이터입니다.")
 st.divider()
 
-# 따뜻한 톤의 색상 지정 (코랄/복숭아 테마)
+# 디자인 테마 색상 (메인 코랄/복숭아, 서브 감청색)
 warm_color = "#E07A5F"
+sub_color = "#3D405B"
 
 # --------------------------------------------------
 # 1) 총인구 요약 통계량 (describe)
@@ -52,11 +57,8 @@ st.write(
     "동네별 총인구의 평균, 중앙값(50%), 최소/최댓값 등 데이터의 대표 수치를 확인합니다."
 )
 
-# describe() 결과를 보기 쉽게 데이터프레임 형태로 변환
 desc_df = df["총인구"].describe().to_frame()
 desc_df.columns = ["총인구 (명)"]
-
-# 스트림릿 표 형태로 출력
 st.dataframe(desc_df, use_container_width=True)
 
 st.divider()
@@ -69,7 +71,6 @@ st.write(
     "인구 구간별로 몇 개의 동네가 속해 있는지 막대의 높이로 나타낸 그래프입니다."
 )
 
-# Plotly 대화형 히스토그램 생성
 fig_hist = px.histogram(
     df,
     x="총인구",
@@ -79,15 +80,12 @@ fig_hist = px.histogram(
     color_discrete_sequence=[warm_color],
 )
 
-# 그래프 스타일 변경
 fig_hist.update_layout(
     xaxis_title="총인구 (명)",
     yaxis_title="동네 수 (개)",
     hovermode="x unified",
     template="plotly_white",
 )
-
-# 스트림릿에 Plotly 그래프 표시
 st.plotly_chart(fig_hist, use_container_width=True)
 
 st.divider()
@@ -100,18 +98,90 @@ st.write(
     "데이터의 사분위수(25%, 50%, 75%)와 인구가 유독 많은 동네(이상치 점)를 쉽게 찾아냅니다."
 )
 
-# Plotly 대화형 상자그림 생성
 fig_box = px.box(
     df,
     y="총인구",
     title="읍·면·동 총인구 상자그림 (Box Plot)",
     labels={"총인구": "총인구 (명)"},
     color_discrete_sequence=[warm_color],
-    points="outliers",  # 이상치 점을 명확히 표시
+    points="outliers",
 )
 
-# 그래프 스타일 변경
 fig_box.update_layout(yaxis_title="총인구 (명)", template="plotly_white")
-
-# 스트림릿에 Plotly 그래프 표시
 st.plotly_chart(fig_box, use_container_width=True)
+
+st.divider()
+
+# --------------------------------------------------
+# 4) 시도별 총인구 합계 막대그래프 (추가)
+# --------------------------------------------------
+st.subheader("4️⃣ 시도별 총인구 비교 (막대그래프)")
+st.info(
+    "💡 **왜 이 그래프가 필요할까요?**\n\n"
+    "동네 단위의 퍼짐을 넘어 **지역 단위(시·도)**로 데이터를 묶었을 때 "
+    "수도권과 지방 사이에 얼마나 거대한 인구 격차가 존재하는지 한눈에 파악하기 위해서입니다."
+)
+
+# 시도별 인구 합계 구하기 및 내림차순 정렬
+df_sido = (
+    df.groupby("시도")["총인구"].sum().reset_index().sort_values(by="총인구", ascending=False)
+)
+
+fig_bar = px.bar(
+    df_sido,
+    x="시도",
+    y="총인구",
+    title="시도별 총인구 합계 (인구순 정렬)",
+    labels={"총인구": "총인구 (명)", "시도": "시·도"},
+    color_discrete_sequence=[sub_color],
+)
+
+fig_bar.update_layout(
+    xaxis_title="시·도",
+    yaxis_title="총인구 (명)",
+    hovermode="x unified",
+    template="plotly_white",
+)
+st.plotly_chart(fig_bar, use_container_width=True)
+
+st.divider()
+
+# --------------------------------------------------
+# 5) 동네별 남·여 인구 산점도 (추가)
+# --------------------------------------------------
+st.subheader("5️⃣ 동네별 남·여 인구 분포 (산점도)")
+st.info(
+    "💡 **왜 이 그래프가 필요할까요?**\n\n"
+    "단순히 '총인구' 표만 봐서는 알 수 없었던 **남녀 성비의 균형과 편차**를 확인하기 위해서입니다. "
+    "대각선 기준선에서 멀어진 점일수록 남성 또는 여성 인구가 한쪽으로 치우친 동네임을 의미합니다."
+)
+
+fig_scatter = px.scatter(
+    df,
+    x="남_총인구",
+    y="여_총인구",
+    hover_name="동",
+    hover_data=["시도", "시군구"],
+    title="읍·면·동별 남성 인구 vs 여성 인구",
+    labels={"남_총인구": "남성 인구 (명)", "여_총인구": "여성 인구 (명)"},
+    color_discrete_sequence=[warm_color],
+    opacity=0.6,  # 점들이 겹쳐 보여도 밀도를 알 수 있게 투명도 설정
+)
+
+# 완벽한 성비 균형(1:1)을 나타내는 대각선 가이드라인 추가
+max_val = max(df["남_총인구"].max(), df["여_총인구"].max())
+fig_scatter.add_shape(
+    type="line",
+    x0=0,
+    y0=0,
+    x1=max_val,
+    y1=max_val,
+    line=dict(color="Gray", dash="dash"),
+)
+
+fig_scatter.update_layout(
+    xaxis_title="남성 인구 (명)",
+    yaxis_title="여성 인구 (명)",
+    template="plotly_white",
+)
+st.plotly_chart(fig_scatter, use_container_width=True)
